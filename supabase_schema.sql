@@ -78,7 +78,7 @@ ALTER TABLE public.games_cache ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Games cache is publicly readable" 
   ON public.games_cache FOR SELECT 
-  TO authenticated, anonymous
+  TO authenticated, anon
   USING (TRUE);
 
 -- 4. DAILY PICKS TABLE
