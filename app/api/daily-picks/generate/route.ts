@@ -84,10 +84,10 @@ async function scrapeFreeGamesOnly() {
     console.warn('Free Epic Promotions fetch failed:', e)
   }
 
-  for (const game of games) {
+  if (games.length > 0) {
     await supabaseAdmin
       .from('games_cache')
-      .upsert(game, { onConflict: 'game_id' })
+      .upsert(games, { onConflict: 'game_id' })
   }
 }
 
@@ -118,10 +118,10 @@ async function scrapeHighDiscountGamesOnly(minDiscount: number) {
     console.warn('High discount CheapShark fetch failed:', e)
   }
 
-  for (const game of games) {
+  if (games.length > 0) {
     await supabaseAdmin
       .from('games_cache')
-      .upsert(game, { onConflict: 'game_id' })
+      .upsert(games, { onConflict: 'game_id' })
   }
 }
 
@@ -189,46 +189,50 @@ export async function generatePicksForUser(userId: string) {
     .delete()
     .eq('user_id', userId)
 
-  // 6. Insert new daily picks
-  for (const pick of dailyPicksToInsert) {
+  // 6. Insert new daily picks in bulk
+  if (dailyPicksToInsert.length > 0) {
+    const dailyPicksData = dailyPicksToInsert.map(pick => ({
+      user_id: userId,
+      game_id: pick.game_id,
+      game_name: pick.game_name,
+      platform: pick.platform,
+      store_url: pick.store_url,
+      game_image: pick.game_image,
+      discount_percent: pick.discount_percent,
+      rating: pick.rating,
+      claimed: false
+    }))
     await supabaseAdmin
       .from('daily_picks')
-      .insert({
-        user_id: userId,
-        game_id: pick.game_id,
-        game_name: pick.game_name,
-        platform: pick.platform,
-        store_url: pick.store_url,
-        game_image: pick.game_image,
-        discount_percent: pick.discount_percent,
-        rating: pick.rating,
-        claimed: false
-      })
+      .insert(dailyPicksData)
   }
 
-  // 7. Detect and insert Treasure Alerts
+  // 7. Detect and insert Treasure Alerts in bulk
   const treasureGames = matchedGames.filter(game => game.discount_percent === 100 || game.discount_percent >= 90)
 
-  for (const treasure of treasureGames) {
-    const { data: existingAlert } = await supabaseAdmin
+  if (treasureGames.length > 0) {
+    const { data: existingAlerts } = await supabaseAdmin
       .from('treasure_alerts')
-      .select('*')
+      .select('game_id')
       .eq('user_id', userId)
-      .eq('game_id', treasure.game_id)
-      .maybeSingle()
 
-    if (!existingAlert) {
+    const existingIds = new Set((existingAlerts || []).map(a => a.game_id))
+    const alertsToInsert = treasureGames
+      .filter(t => !existingIds.has(t.game_id))
+      .map(t => ({
+        user_id: userId,
+        game_id: t.game_id,
+        game_name: t.game_name,
+        platform: t.platform,
+        store_url: t.store_url,
+        seen: false,
+        clicked: false
+      }))
+
+    if (alertsToInsert.length > 0) {
       await supabaseAdmin
         .from('treasure_alerts')
-        .insert({
-          user_id: userId,
-          game_id: treasure.game_id,
-          game_name: treasure.game_name,
-          platform: treasure.platform,
-          store_url: treasure.store_url,
-          seen: false,
-          clicked: false
-        })
+        .insert(alertsToInsert)
     }
   }
 
