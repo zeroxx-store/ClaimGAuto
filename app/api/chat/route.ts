@@ -8,33 +8,74 @@ export async function POST(req: NextRequest) {
   try {
     const { userId, message, history } = await req.json()
 
-    if (!userId || !message) {
-      return NextResponse.json({ error: 'Missing userId or message' }, { status: 400 })
+    if (!userId) {
+      return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
     }
 
-    // 1. Fetch current preferences
-    const { data: prefs, error: prefsError } = await supabaseAdmin
+    // 1. Fetch current preferences and chat history from database
+    const { data: existingPrefs, error: prefsError } = await supabaseAdmin
       .from('user_preferences')
-      .select('*')
+      .select('genres, price_type, min_rating, chat_history')
       .eq('user_id', userId)
-      .single()
+      .maybeSingle()
 
-    const currentPrefsText = prefs
-      ? `Current genres: [${prefs.genres?.join(', ') || ''}], Price tier: ${prefs.price_type || 'discount75'}, Min rating: ${prefs.min_rating || 70}`
-      : 'No preferences set yet.'
+    // 2. Scenario: No active message (Initial drawer load check)
+    if (!message) {
+      if (existingPrefs?.genres?.length > 0 && existingPrefs?.price_type) {
+        const welcomeText = `🎮 مرحباً بعودتك! تفضيلاتك الحالية:
+- أنواع الألعاب: ${existingPrefs.genres.join(', ') || 'لم تحدد بعد'}
+- نوع العروض: ${existingPrefs.price_type}
+- أقل تقييم: ${existingPrefs.min_rating}%
 
-    // 2. Define the System Prompt
-    const systemPrompt = `You are ClaimSage, a friendly AI gaming assistant for ClaimSG.auto. Your job is to learn the user's game preferences through a conversational interview.
-Your task is to gather the following 4 pieces of information, ONE AT A TIME:
+هل تريد تعديل أي شيء؟`
+
+        let finalHistory = existingPrefs.chat_history || []
+        if (finalHistory.length === 0) {
+          finalHistory = [{ role: 'assistant', content: welcomeText }]
+        }
+
+        return NextResponse.json({
+          message: welcomeText,
+          history: finalHistory,
+          hasPreferences: true,
+          preferences: existingPrefs
+        })
+      } else {
+        const welcomeText = "Hello! 🎮 I'm ClaimSage, your personal game recommender. Let's customize your discoveries. What game genres do you love? (Choose from: Action, Adventure, Puzzle, Sports, Racing, Horror, Strategy, RPG)"
+        let finalHistory = existingPrefs?.chat_history || []
+        if (finalHistory.length === 0) {
+          finalHistory = [{ role: 'assistant', content: welcomeText }]
+        }
+        return NextResponse.json({
+          message: welcomeText,
+          history: finalHistory,
+          hasPreferences: false
+        })
+      }
+    }
+
+    // 3. Construct System Prompt with existing preferences integrated
+    const currentGenres = existingPrefs?.genres?.join(', ') || 'لا يوجد'
+    const currentPrice = existingPrefs?.price_type || 'لم يحدد'
+    const currentRating = existingPrefs?.min_rating || 70
+
+    const systemPrompt = `You are ClaimSage, a friendly AI gaming assistant for ClaimSG.auto. Your job is to learn or update the user's game preferences through a conversational interview.
+
+المستخدم لديه حالياً هذه التفضيلات المحفوظة في قاعدة البيانات:
+- الأنواع المفضلة (Genres): ${currentGenres}
+- نوع العروض (Price Type): ${currentPrice}
+- أقل تقييم (Min Rating): ${currentRating}%
+
+إذا كانت التفضيلات موجودة بالفعل، لا تسأله عنها مرة أخرى من البداية. فقط تعامل مع رسالته مباشرة، وساعده على تحديثها إذا طلب ذلك (مثلاً إذا قال "غير النوع إلى RPG" فقم بتغييرها).
+
+Your task is to gather the following 4 pieces of information, ONE AT A TIME (unless already specified above):
 1. Favorite game genres: Action, Adventure, Puzzle, Sports, Racing, Horror, Strategy, RPG (User can choose multiple)
 2. Type of deals they want: 'free_only' (100% free), 'discount90' (90%+ off), 'discount80' (80%+ off), 'discount75' (75%+ off), 'all' (all deals)
 3. Minimum Steam/Epic rating: An integer between 0 and 100 (suggest 70 as default)
 4. WhatsApp number (optional, e.g. +1234567890, only active if they subscribe to the Ultimate plan, otherwise write "skip").
 
-Current Preferences Status: ${currentPrefsText}
-
 Ask questions in a friendly, conversational manner. Use emojis 🎮. Ask only ONE question at a time.
-Once you have gathered ALL the answers (or if the user says they want to save their details), output a confirmation message like "PREFERENCES_SAVED! Your settings are updated." AND append a JSON block at the very end of your response inside a markdown code block:
+Once you have gathered ALL the answers (or if the user requests to update/save their settings), output a confirmation message like "PREFERENCES_SAVED! Your settings are updated." AND append a JSON block at the very end of your response inside a markdown code block:
 \`\`\`json
 {
   "genres": ["Action", "RPG"],
@@ -45,11 +86,11 @@ Once you have gathered ALL the answers (or if the user says they want to save th
 \`\`\`
 Ensure the JSON block is the absolute last thing in your response and follows this exact structure. Do not output JSON until you have all answers.`
 
-    // 3. Request Llama 3.1 model from Cloudflare Workers AI
+    // 4. Request Llama 3.1 model from Cloudflare Workers AI
     const url = `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3.1-8b-instruct`
     
     let aiMessage = "I'm having trouble connecting to ClaimSage. Please configure your Cloudflare credentials."
-    let newHistory = history || []
+    let newHistory = history || existingPrefs?.chat_history || []
 
     if (CLOUDFLARE_ACCOUNT_ID && CLOUDFLARE_API_TOKEN && CLOUDFLARE_ACCOUNT_ID !== 'placeholder_cf_account_id') {
       try {
@@ -80,23 +121,35 @@ Ensure the JSON block is the absolute last thing in your response and follows th
         console.error('Failed to call Cloudflare API:', err)
       }
     } else {
-      // Mock conversation if Cloudflare is not configured yet
-      if (message.toLowerCase().includes('hello') || message.toLowerCase().includes('hi')) {
+      // Mock conversation fallback if Cloudflare is not configured
+      const lowerMsg = message.toLowerCase()
+      if (lowerMsg.includes('change') || lowerMsg.includes('genre') || lowerMsg.includes('rpg') || lowerMsg.includes('action') || lowerMsg.includes('strategy')) {
+        const detectedGenres: string[] = []
+        if (lowerMsg.includes('rpg')) detectedGenres.push('RPG')
+        if (lowerMsg.includes('action')) detectedGenres.push('Action')
+        if (lowerMsg.includes('strategy')) detectedGenres.push('Strategy')
+        if (lowerMsg.includes('adventure')) detectedGenres.push('Adventure')
+        if (detectedGenres.length === 0) detectedGenres.push('Action')
+
+        aiMessage = `PREFERENCES_SAVED! I've updated your preferences with the requested genres. Happy gaming! 🏆\n\n\`\`\`json\n{\n  "genres": ${JSON.stringify(detectedGenres)},\n  "price_type": "${existingPrefs?.price_type || 'discount75'}",\n  "min_rating": ${existingPrefs?.min_rating || 70},\n  "whatsapp_phone": "skip"\n}\n\`\`\``
+
+
+      } else if (lowerMsg.includes('hello') || lowerMsg.includes('hi')) {
         aiMessage = "Hello! 🎮 I'm ClaimSage. I'll help you customize your daily game discoveries. Let's start: What game genres do you love? (Action, Adventure, Puzzle, Sports, Racing, Horror, Strategy, RPG)"
-      } else if (newHistory.length === 0 || newHistory.length === 2) {
+      } else if (newHistory.length <= 1) {
         aiMessage = "Awesome! 🕹️ Next up, what type of deals interest you? Choose from: 'Free only', '90%+ off', '80%+ off', '75%+ off', or 'All deals'!"
-      } else if (newHistory.length === 4) {
+      } else if (newHistory.length <= 3) {
         aiMessage = "Got it! 🚀 What is your minimum Steam/Epic rating? (0 to 100, we recommend 70)"
-      } else if (newHistory.length === 6) {
+      } else if (newHistory.length <= 5) {
         aiMessage = "Perfect! 📱 Would you like to add a WhatsApp number for daily notifications? (E.g. +1234567890, only for Ultimate plan, or write 'skip')"
       } else {
-        aiMessage = "PREFERENCES_SAVED! Your settings are updated. Happy gaming! 🏆\n\n```json\n{\n  \"genres\": [\"Action\", \"RPG\", \"Strategy\"],\n  \"price_type\": \"discount75\",\n  \"min_rating\": 70,\n  \"whatsapp_phone\": \"+1234567890\"\n}\n```"
+        aiMessage = `PREFERENCES_SAVED! Your settings are updated. Happy gaming! 🏆\n\n\`\`\`json\n{\n  "genres": ${JSON.stringify(existingPrefs?.genres || ["Action"])},\n  "price_type": "${existingPrefs?.price_type || 'discount75'}",\n  "min_rating": ${existingPrefs?.min_rating || 70},\n  "whatsapp_phone": "skip"\n}\n\`\`\``
       }
     }
 
     newHistory = [...newHistory, { role: 'user', content: message }, { role: 'assistant', content: aiMessage }]
 
-    // 4. Check if preferences are finalized in the response
+    // 5. Check if preferences are finalized in the response
     let extractedPrefs: any = null
     const jsonMatch = aiMessage.match(/```json\s*([\s\S]*?)\s*```/)
     if (jsonMatch && jsonMatch[1]) {
@@ -107,9 +160,8 @@ Ensure the JSON block is the absolute last thing in your response and follows th
       }
     }
 
-    // 5. Update user preferences and chat history in database
+    // 6. Update user preferences and chat history in database
     if (extractedPrefs) {
-      // Update preferences table
       await supabaseAdmin
         .from('user_preferences')
         .upsert({
@@ -121,7 +173,6 @@ Ensure the JSON block is the absolute last thing in your response and follows th
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' })
 
-      // Update whatsapp phone in users table
       if (extractedPrefs.whatsapp_phone && extractedPrefs.whatsapp_phone.toLowerCase() !== 'skip') {
         await supabaseAdmin
           .from('users')

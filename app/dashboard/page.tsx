@@ -85,8 +85,18 @@ export default function DashboardPage() {
         .eq('user_id', userId)
         .maybeSingle()
 
-      if (prefs?.chat_history) {
+      if (prefs?.chat_history && prefs.chat_history.length > 0) {
         setChatMessages(prefs.chat_history)
+      } else if (prefs?.genres && prefs.genres.length > 0) {
+        const welcomeText = `🎮 مرحباً بعودتك! تفضيلاتك الحالية:
+- أنواع الألعاب: ${prefs.genres.join(', ') || 'لم تحدد بعد'}
+- نوع العروض: ${prefs.price_type || 'discount75'}
+- أقل تقييم: ${prefs.min_rating || 70}%
+
+هل تريد تعديل أي شيء؟`
+        setChatMessages([
+          { role: 'assistant', content: welcomeText }
+        ])
       } else {
         // Set default welcome message
         setChatMessages([
