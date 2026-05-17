@@ -190,8 +190,11 @@ Ensure the JSON block is the absolute last thing in your response and follows th
       }
     }
 
+    let preferencesUpdated = false
+
     // 7. Update user preferences and chat history in database
     if (extractedPrefs) {
+      preferencesUpdated = true
       await supabaseAdmin
         .from('user_preferences')
         .upsert({
@@ -227,7 +230,11 @@ Ensure the JSON block is the absolute last thing in your response and follows th
         }, { onConflict: 'user_id' })
     }
 
-    return NextResponse.json({ message: aiMessage, history: newHistory })
+    return NextResponse.json({ 
+      message: aiMessage, 
+      history: newHistory, 
+      preferencesUpdated 
+    })
 
   } catch (error: any) {
     console.error('Chat API Error:', error)

@@ -6,6 +6,7 @@ import Header from '@/components/Header'
 import GameCard from '@/components/GameCard'
 import TreasureFrame from '@/components/TreasureFrame'
 import { Crown, Medal, X, Sparkles, Send, Bot, User as UserIcon, Loader2, RefreshCw, Gift } from 'lucide-react'
+import PremiumChat from '@/components/PremiumChat'
 
 const quickReplies = [
   { label: "🎮 Action", value: "I prefer Action games" },
@@ -534,109 +535,19 @@ export default function DashboardPage() {
       </main>
 
       {/* Floating AI Preferences Chat Panel (Drawer) */}
-      {chatOpen && (
-        <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[450px] bg-[#1f1f1f]/95 backdrop-blur-xl border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-          
-          {/* Header */}
-          <div className="p-5 border-b border-white/5 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#6c63ff] to-[#00d4ff] flex items-center justify-center">
-                <Bot className="w-5 h-5 text-white animate-pulse" />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-white text-base">ClaimSage Assistant</h3>
-                <span className="text-[10px] font-bold text-[#00d4ff] uppercase tracking-widest font-sans flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00d4ff] animate-ping" /> Llama 3.1 Active
-                </span>
-              </div>
-            </div>
-            <button 
-              onClick={() => {
-                setChatOpen(false)
-                if (user) {
-                  fetchPicks(user.id)
-                }
-              }}
-              className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition duration-200"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Messages Thread */}
-          <div className="flex-grow p-5 overflow-y-auto flex flex-col gap-4">
-            {chatMessages.map((msg, i) => {
-              const isAI = msg.role === 'assistant'
-              // Hide JSON blocks from bubbles for cleaner conversation
-              const cleanContent = msg.content.replace(/```json[\s\S]*?```/, '').trim()
-              
-              if (!cleanContent) return null
-
-              return (
-                <div key={i} className={`flex items-start gap-2.5 max-w-[85%] ${isAI ? 'self-start' : 'self-end flex-row-reverse'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
-                    ${isAI ? 'bg-gradient-to-tr from-[#6c63ff] to-[#00d4ff] text-white' : 'bg-white/5 text-[#00d4ff] border border-white/10'}
-                  `}>
-                    {isAI ? <Bot className="w-4 h-4" /> : <UserIcon className="w-4 h-4" />}
-                  </div>
-                  <div className={`p-4 rounded-2xl text-sm leading-relaxed font-medium
-                    ${isAI ? 'bg-white/5 text-gray-200 border border-white/5 rounded-tl-sm' : 'bg-gradient-to-tr from-[#6c63ff] to-[#6c63ff]/70 text-white rounded-tr-sm shadow-md shadow-[#6c63ff]/10'}
-                  `}>
-                    {cleanContent}
-                  </div>
-                </div>
-              )
-            })}
-            
-            {chatLoading && (
-              <div className="flex items-center gap-2.5 self-start">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#6c63ff] to-[#00d4ff] text-white flex items-center justify-center animate-spin">
-                  <Loader2 className="w-4 h-4" />
-                </div>
-                <div className="p-4 bg-white/5 border border-white/5 text-gray-400 text-sm font-semibold rounded-2xl rounded-tl-sm">
-                  ClaimSage is typing...
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Quick Replies section */}
-          {!chatLoading && (
-            <div className="px-5 py-3 border-t border-white/5 bg-[#1f1f1f]/50 flex flex-wrap gap-2 max-h-[120px] overflow-y-auto">
-              {quickReplies.map((reply) => (
-                <button
-                  key={reply.label}
-                  type="button"
-                  onClick={() => sendDirectMessage(reply.value)}
-                  className="bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 text-xs px-2.5 py-1.5 rounded-xl transition duration-150 font-semibold"
-                >
-                  {reply.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Input Footer */}
-          <form onSubmit={handleSendMessage} className="p-5 border-t border-white/5 flex gap-2.5 bg-[#0a0a0a]/60">
-            <input 
-              type="text" 
-              placeholder="e.g. Action and Strategy games please" 
-              value={chatInput} 
-              onChange={(e) => setChatInput(e.target.value)} 
-              className="flex-grow p-3.5 bg-[#0a0a0a] text-white border border-white/10 focus:border-[#00d4ff]/40 rounded-xl outline-none text-sm font-medium" 
-              required
-              disabled={chatLoading}
-            />
-            <button 
-              type="submit" 
-              disabled={chatLoading}
-              className="bg-[#6c63ff] hover:opacity-90 disabled:opacity-50 text-white p-3.5 rounded-xl transition flex items-center justify-center shadow-md shadow-[#6c63ff]/10"
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          </form>
-
+      {chatOpen && user && (
+        <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[450px] animate-in slide-in-from-right duration-300">
+          <PremiumChat 
+            userId={user.id} 
+            onClose={() => {
+              setChatOpen(false)
+              fetchPicks(user.id)
+            }}
+            onPreferencesSaved={async () => {
+              // Automatically regenerate matches when user preferences are saved
+              await handleGeneratePicks()
+            }}
+          />
         </div>
       )}
     </div>
