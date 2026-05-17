@@ -213,16 +213,4 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- ========================================================
--- SEED MOCK DATA FOR DEMO & TESTING
--- ========================================================
-
-INSERT INTO public.games_cache (game_id, game_name, platform, store_url, game_image, discount_percent, rating, genres)
-VALUES 
-  ('steam_mock_1', 'Assassin''s Creed Mirage', 'epic', 'https://store.epicgames.com/', 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?q=80&w=800', 100, 88, ARRAY['Action', 'Adventure']),
-  ('steam_mock_2', 'Hades II', 'steam', 'https://store.steampowered.com/', 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=800', 90, 95, ARRAY['Action', 'RPG']),
-  ('epic_mock_1', 'Grand Theft Auto V', 'epic', 'https://www.epicgames.com/', 'https://images.unsplash.com/photo-1552820728-8b83bb6b773f?q=80&w=800', 100, 91, ARRAY['Action', 'Adventure']),
-  ('steam_mock_3', 'Cyberpunk 2077', 'steam', 'https://store.steampowered.com/', 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=800', 80, 84, ARRAY['Action', 'RPG', 'Strategy']),
-  ('steam_mock_4', 'Witcher 3: Wild Hunt', 'steam', 'https://store.steampowered.com/', 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?q=80&w=800', 85, 97, ARRAY['Adventure', 'RPG']);
-
 
