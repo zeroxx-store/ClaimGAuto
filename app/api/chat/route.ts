@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { generatePicksForUser } from '../daily-picks/generate/route'
 
 const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
 const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
@@ -59,7 +60,9 @@ export async function POST(req: NextRequest) {
     const currentPrice = existingPrefs?.price_type || 'لم يحدد'
     const currentRating = existingPrefs?.min_rating || 70
 
-    const systemPrompt = `You are ClaimSage, a friendly AI gaming assistant for ClaimSG.auto. Your job is to learn or update the user's game preferences through a conversational interview.
+    const systemPrompt = `You are ClaimSage, a friendly AI gaming assistant for ClaimSG.auto. Your ONLY job is to learn or update the user's game preferences through a conversational interview.
+
+❌ CRITICAL RULE: DO NOT recommend, suggest, list, or name any specific video games in your chat messages. If a user asks for game recommendations, politely remind them that their customized recommendations are generated and displayed directly on their Dashboard screen. Keep your dialogue strictly limited to analyzing their preference criteria.
 
 المستخدم لديه حالياً هذه التفضيلات المحفوظة في قاعدة البيانات:
 - الأنواع المفضلة (Genres): ${currentGenres}
@@ -133,7 +136,6 @@ Ensure the JSON block is the absolute last thing in your response and follows th
 
         aiMessage = `PREFERENCES_SAVED! I've updated your preferences with the requested genres. Happy gaming! 🏆\n\n\`\`\`json\n{\n  "genres": ${JSON.stringify(detectedGenres)},\n  "price_type": "${existingPrefs?.price_type || 'discount75'}",\n  "min_rating": ${existingPrefs?.min_rating || 70},\n  "whatsapp_phone": "skip"\n}\n\`\`\``
 
-
       } else if (lowerMsg.includes('hello') || lowerMsg.includes('hi')) {
         aiMessage = "Hello! 🎮 I'm ClaimSage. I'll help you customize your daily game discoveries. Let's start: What game genres do you love? (Action, Adventure, Puzzle, Sports, Racing, Horror, Strategy, RPG)"
       } else if (newHistory.length <= 1) {
@@ -178,6 +180,13 @@ Ensure the JSON block is the absolute last thing in your response and follows th
           .from('users')
           .update({ whatsapp_phone: extractedPrefs.whatsapp_phone })
           .eq('id', userId)
+      }
+
+      // TRIGGER IMMEDIATE GENERATION!
+      try {
+        await generatePicksForUser(userId)
+      } catch (genErr) {
+        console.error('Failed to generate daily picks instantly after pref change:', genErr)
       }
     } else {
       // Just save the history so far

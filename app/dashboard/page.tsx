@@ -405,7 +405,8 @@ export default function DashboardPage() {
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button
-                onClick={() => handleSilverAdClick(1)}
+                type="button"
+                onClick={(e) => { e.preventDefault(); handleSilverAdClick(1); }}
                 disabled={silverClicks.ad1}
                 className={`py-3 px-4 rounded-xl text-xs font-bold uppercase transition flex items-center justify-center gap-2 border
                   ${silverClicks.ad1 
@@ -417,7 +418,8 @@ export default function DashboardPage() {
               </button>
 
               <button
-                onClick={() => handleSilverAdClick(2)}
+                type="button"
+                onClick={(e) => { e.preventDefault(); handleSilverAdClick(2); }}
                 disabled={silverClicks.ad2}
                 className={`py-3 px-4 rounded-xl text-xs font-bold uppercase transition flex items-center justify-center gap-2 border
                   ${silverClicks.ad2 
@@ -502,7 +504,12 @@ export default function DashboardPage() {
               </div>
             </div>
             <button 
-              onClick={() => setChatOpen(false)}
+              onClick={() => {
+                setChatOpen(false)
+                if (user) {
+                  fetchPicks(user.id)
+                }
+              }}
               className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition duration-200"
             >
               <X className="w-5 h-5" />
