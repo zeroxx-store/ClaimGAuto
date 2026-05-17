@@ -192,6 +192,28 @@ export default function DashboardPage() {
     }
   }
 
+  const handleTargetedPicksRefresh = async () => {
+    if (!user) return
+    try {
+      setGenerating(true)
+      setRefreshMessage("Sourcing fresh targeted deals...")
+      const res = await fetch('/api/daily-picks/generate', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
+      })
+      if (res.ok) {
+        await fetchPicks(user.id)
+        setRefreshMessage("Targeted games generated successfully!")
+        setTimeout(() => setRefreshMessage(null), 3000)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
   // 3. Ad-aware Game link claims
   const handleGetGame = async (game: any) => {
     if (!user) return
@@ -545,7 +567,7 @@ export default function DashboardPage() {
             }}
             onPreferencesSaved={async () => {
               // Automatically regenerate matches when user preferences are saved
-              await handleGeneratePicks()
+              await handleTargetedPicksRefresh()
             }}
           />
         </div>

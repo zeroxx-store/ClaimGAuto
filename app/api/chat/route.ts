@@ -5,6 +5,108 @@ import { generatePicksForUser } from '../daily-picks/generate/route'
 const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
 const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
 
+async function detectUserIntent(message: string, currentPrefs: any, userId: string, history: any[]) {
+  const normalizedMsg = message.toLowerCase()
+  
+  const updatedPrefs = {
+    genres: currentPrefs?.genres ? [...currentPrefs.genres] : [],
+    price_type: currentPrefs?.price_type || 'discount75',
+    min_rating: currentPrefs?.min_rating || 70
+  }
+
+  // 1. Detect Price Type / Deal Preference
+  if (
+    normalizedMsg.includes('free') || 
+    normalizedMsg.includes('gratuit') || 
+    normalizedMsg.includes('مجاني') || 
+    normalizedMsg.includes('مجانى') || 
+    normalizedMsg.includes('مجانية') ||
+    normalizedMsg.includes('0$') ||
+    normalizedMsg.includes('$0')
+  ) {
+    updatedPrefs.price_type = 'free_only'
+  } else if (normalizedMsg.includes('90') || normalizedMsg.includes('تسعين')) {
+    updatedPrefs.price_type = 'discount90'
+  } else if (normalizedMsg.includes('80') || normalizedMsg.includes('ثمانين')) {
+    updatedPrefs.price_type = 'discount80'
+  } else if (normalizedMsg.includes('75') || normalizedMsg.includes('خمسة وسبعين') || normalizedMsg.includes('خمسه وسبعين')) {
+    updatedPrefs.price_type = 'discount75'
+  } else if (normalizedMsg.includes('all') || normalizedMsg.includes('كل') || normalizedMsg.includes('الجميع')) {
+    updatedPrefs.price_type = 'all'
+  }
+
+  // 2. Detect Genres (English and Arabic)
+  const genreMapping: { [key: string]: string } = {
+    'action': 'Action',
+    'أكشن': 'Action',
+    'اكشن': 'Action',
+    'adventure': 'Adventure',
+    'مغامرات': 'Adventure',
+    'مغامرة': 'Adventure',
+    'rpg': 'RPG',
+    'آر بي جي': 'RPG',
+    'ار بي جي': 'RPG',
+    'تقمص': 'RPG',
+    'strategy': 'Strategy',
+    'استراتيجية': 'Strategy',
+    'إستراتيجية': 'Strategy',
+    'تخطيط': 'Strategy',
+    'puzzle': 'Puzzle',
+    'ألغاز': 'Puzzle',
+    'الغاز': 'Puzzle',
+    'لغز': 'Puzzle',
+    'horror': 'Horror',
+    'رعب': 'Horror',
+    'shooter': 'Shooter',
+    'تصويب': 'Shooter',
+    'شوتر': 'Shooter',
+    'racing': 'Racing',
+    'سباق': 'Racing',
+    'سباقات': 'Racing',
+    'sports': 'Sports',
+    'رياضة': 'Sports',
+    'رياضية': 'Sports'
+  }
+
+  Object.entries(genreMapping).forEach(([keyword, genreName]) => {
+    if (normalizedMsg.includes(keyword)) {
+      if (!updatedPrefs.genres.includes(genreName)) {
+        updatedPrefs.genres.push(genreName)
+      }
+    }
+  })
+
+  // 3. Detect Minimum Rating (a number between 10 and 99 that isn't a discount percentage)
+  const ratingMatches = normalizedMsg.match(/\b(100|[1-9]\d)\b/)
+  if (ratingMatches) {
+    const num = parseInt(ratingMatches[1])
+    if (num <= 100 && num >= 10 && num !== 90 && num !== 80 && num !== 75) {
+      updatedPrefs.min_rating = num
+    }
+  }
+
+  // Save the detected preferences instantly in the DB
+  await supabaseAdmin
+    .from('user_preferences')
+    .upsert({
+      user_id: userId,
+      genres: updatedPrefs.genres,
+      price_type: updatedPrefs.price_type,
+      min_rating: updatedPrefs.min_rating,
+      chat_history: [...history, { role: 'user', content: message }],
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id' })
+
+  // Trigger immediate targeted daily picks generation
+  try {
+    await generatePicksForUser(userId)
+  } catch (err) {
+    console.error('Failed to trigger targeted generatePicksForUser:', err)
+  }
+
+  return updatedPrefs
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { userId, message, history } = await req.json()
@@ -81,9 +183,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Construct System Prompt with existing preferences integrated
-    const currentGenres = existingPrefs?.genres?.join(', ') || 'لا يوجد'
-    const currentPrice = existingPrefs?.price_type || 'لم يحدد'
-    const currentRating = existingPrefs?.min_rating || 70
+    const updatedPrefs = await detectUserIntent(message, existingPrefs, userId, history || [])
+    const currentGenres = updatedPrefs.genres.join(', ') || 'لا يوجد'
+    const currentPrice = updatedPrefs.price_type
+    const currentRating = updatedPrefs.min_rating
 
     const systemPrompt = `You are ClaimSage, a friendly AI gaming assistant for ClaimSG.auto. Your ONLY job is to learn or update the user's game preferences through a conversational interview.
 
