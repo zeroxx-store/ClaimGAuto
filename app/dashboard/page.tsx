@@ -480,9 +480,9 @@ export default function DashboardPage() {
             <div className="bg-[#1f1f1f]/20 backdrop-blur-md border border-white/5 p-12 rounded-3xl text-center flex flex-col items-center gap-4">
               <Bot className="w-12 h-12 text-[#6c63ff]" />
               <div>
-                <h3 className="text-white font-bold text-lg">Your dashboard is empty</h3>
+                <h3 className="text-white font-bold text-lg">No games found matching your preferences</h3>
                 <p className="text-gray-400 text-sm mt-1 max-w-sm mx-auto">
-                  No daily picks discovered yet. Click below to pull live Steam/Epic database scrapers and generate matches.
+                  Try adjusting your preferences in the Preference Chat, or click below to refresh and fetch the latest live deals from Steam and Epic Games.
                 </p>
               </div>
               <button
