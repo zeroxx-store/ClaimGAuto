@@ -55,7 +55,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Construct System Prompt with existing preferences integrated
+    // 3. Scenario: Reset Preferences requested
+    if (message.toLowerCase().includes('reset')) {
+      const resetText = "PREFERENCES_SAVED! Preferences have been reset to defaults. I will now recommend all available deals. 🏆\n\n```json\n{\n  \"genres\": [],\n  \"price_type\": \"discount75\",\n  \"min_rating\": 70,\n  \"whatsapp_phone\": \"skip\"\n}\n```"
+      const finalHistory = [{ role: 'assistant', content: resetText }]
+      
+      await supabaseAdmin
+        .from('user_preferences')
+        .upsert({
+          user_id: userId,
+          genres: [],
+          price_type: 'discount75',
+          min_rating: 70,
+          chat_history: finalHistory,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' })
+
+      try {
+        await generatePicksForUser(userId)
+      } catch (err) {
+        console.error('Failed to trigger immediate pick generation after resetting preferences:', err)
+      }
+
+      return NextResponse.json({ message: resetText, history: finalHistory })
+    }
+
+    // 4. Construct System Prompt with existing preferences integrated
     const currentGenres = existingPrefs?.genres?.join(', ') || 'لا يوجد'
     const currentPrice = existingPrefs?.price_type || 'لم يحدد'
     const currentRating = existingPrefs?.min_rating || 70
@@ -69,7 +94,10 @@ export async function POST(req: NextRequest) {
 - نوع العروض (Price Type): ${currentPrice}
 - أقل تقييم (Min Rating): ${currentRating}%
 
-إذا كانت التفضيلات موجودة بالفعل، لا تسأله عنها مرة أخرى من البداية. فقط تعامل مع رسالته مباشرة، وساعده على تحديثها إذا طلب ذلك (مثلاً إذا قال "غير النوع إلى RPG" فقم بتغييرها).
+⚠️ قواعد صارمة لمنع تكرار الأسئلة:
+1. إذا كانت التفضيلات موجودة بالفعل، لا تسأله عنها مرة أخرى من البداية. فقط تعامل مع رسالته مباشرة، وساعده على تحديثها إذا طلب ذلك (مثلاً إذا قال "غير النوع إلى RPG" فقم بتغييرها).
+2. إذا كانت التفضيلات موجودة، اسأله ببساطة: "هل تريد تعديل أي شيء؟" ولا تكرر طرح نفس السؤال.
+3. لا تكرر نفس السؤال مرتين متتاليتين أبداً.
 
 Your task is to gather the following 4 pieces of information, ONE AT A TIME (unless already specified above):
 1. Favorite game genres: Action, Adventure, Puzzle, Sports, Racing, Horror, Strategy, RPG (User can choose multiple)
@@ -89,7 +117,7 @@ Once you have gathered ALL the answers (or if the user requests to update/save t
 \`\`\`
 Ensure the JSON block is the absolute last thing in your response and follows this exact structure. Do not output JSON until you have all answers.`
 
-    // 4. Request Llama 3.1 model from Cloudflare Workers AI
+    // 5. Request Llama 3.1 model from Cloudflare Workers AI
     const url = `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3.1-8b-instruct`
     
     let aiMessage = "I'm having trouble connecting to ClaimSage. Please configure your Cloudflare credentials."
@@ -151,7 +179,7 @@ Ensure the JSON block is the absolute last thing in your response and follows th
 
     newHistory = [...newHistory, { role: 'user', content: message }, { role: 'assistant', content: aiMessage }]
 
-    // 5. Check if preferences are finalized in the response
+    // 6. Check if preferences are finalized in the response
     let extractedPrefs: any = null
     const jsonMatch = aiMessage.match(/```json\s*([\s\S]*?)\s*```/)
     if (jsonMatch && jsonMatch[1]) {
@@ -162,7 +190,7 @@ Ensure the JSON block is the absolute last thing in your response and follows th
       }
     }
 
-    // 6. Update user preferences and chat history in database
+    // 7. Update user preferences and chat history in database
     if (extractedPrefs) {
       await supabaseAdmin
         .from('user_preferences')

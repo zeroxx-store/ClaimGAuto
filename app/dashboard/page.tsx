@@ -7,6 +7,19 @@ import GameCard from '@/components/GameCard'
 import TreasureFrame from '@/components/TreasureFrame'
 import { Crown, Medal, X, Sparkles, Send, Bot, User as UserIcon, Loader2, RefreshCw, Gift } from 'lucide-react'
 
+const quickReplies = [
+  { label: "🎮 Action", value: "I prefer Action games" },
+  { label: "🗺️ Adventure", value: "I prefer Adventure games" },
+  { label: "🧩 Puzzle", value: "I prefer Puzzle games" },
+  { label: "👻 Horror", value: "I prefer Horror games" },
+  { label: "♟️ Strategy", value: "I prefer Strategy games" },
+  { label: "🧙 RPG", value: "I prefer RPG games" },
+  { label: "💰 Free Only", value: "I want Free games only" },
+  { label: "🔥 90% Off", value: "I want games with 90% discount" },
+  { label: "⭐ 80%+ Rating", value: "I want minimum 80% rating" },
+  { label: "🔄 Reset Prefs", value: "Reset my preferences" },
+]
+
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [userDetails, setUserDetails] = useState<any>(null)
@@ -145,7 +158,11 @@ export default function DashboardPage() {
       await fetch('/api/steam/fetch')
       await fetch('/api/epic/fetch')
       
-      const res = await fetch('/api/daily-picks/generate', { method: 'POST' })
+      const res = await fetch('/api/daily-picks/generate', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
+      })
       if (res.ok) {
         await fetchPicks(user.id)
         // Refresh profile in case a plan is updated
@@ -231,16 +248,13 @@ export default function DashboardPage() {
   }
 
   // 5. Conversational Preferences chat trigger
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!chatInput.trim() || chatLoading || !user) return
+  const sendDirectMessage = async (messageText: string) => {
+    if (!messageText.trim() || chatLoading || !user) return
 
-    const userMessage = chatInput
-    setChatInput('')
     setChatLoading(true)
 
     // Optimistically update message bubble list
-    const tempHistory = [...chatMessages, { role: 'user', content: userMessage }]
+    const tempHistory = [...chatMessages, { role: 'user', content: messageText }]
     setChatMessages(tempHistory)
 
     try {
@@ -249,7 +263,7 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.id,
-          message: userMessage,
+          message: messageText,
           history: chatMessages
         })
       })
@@ -268,6 +282,14 @@ export default function DashboardPage() {
     } finally {
       setChatLoading(false)
     }
+  }
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!chatInput.trim()) return
+    const text = chatInput
+    setChatInput('')
+    await sendDirectMessage(text)
   }
 
   const isGolden = userDetails?.is_golden_supporter
@@ -553,6 +575,22 @@ export default function DashboardPage() {
             )}
             <div ref={messagesEndRef} />
           </div>
+
+          {/* Quick Replies section */}
+          {!chatLoading && (
+            <div className="px-5 py-3 border-t border-white/5 bg-[#1f1f1f]/50 flex flex-wrap gap-2 max-h-[120px] overflow-y-auto">
+              {quickReplies.map((reply) => (
+                <button
+                  key={reply.label}
+                  type="button"
+                  onClick={() => sendDirectMessage(reply.value)}
+                  className="bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 text-xs px-2.5 py-1.5 rounded-xl transition duration-150 font-semibold"
+                >
+                  {reply.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Input Footer */}
           <form onSubmit={handleSendMessage} className="p-5 border-t border-white/5 flex gap-2.5 bg-[#0a0a0a]/60">
