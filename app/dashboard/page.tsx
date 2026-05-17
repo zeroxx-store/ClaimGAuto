@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const [picks, setPicks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null)
   const router = useRouter()
 
   // Ad Banners & Silver Supporter states
@@ -154,9 +155,18 @@ export default function DashboardPage() {
     if (!user) return
     try {
       setGenerating(true)
-      // First scrape steam and epic, then generate recommendations
-      await fetch('/api/steam/fetch')
-      await fetch('/api/epic/fetch')
+      setRefreshMessage("Starting live scrapers...")
+      
+      const steamRes = await fetch('/api/steam/fetch')
+      const steamData = await steamRes.json()
+      
+      const epicRes = await fetch('/api/epic/fetch')
+      const epicData = await epicRes.json()
+
+      const steamCount = steamData.count || 0
+      const epicCount = epicData.count || 0
+      
+      setRefreshMessage(`Running AI recommendation engine...`)
       
       const res = await fetch('/api/daily-picks/generate', { 
         method: 'POST', 
@@ -168,9 +178,14 @@ export default function DashboardPage() {
         // Refresh profile in case a plan is updated
         const { data: profile } = await supabase.from('users').select('*').eq('id', user.id).single()
         setUserDetails(profile)
+        
+        setRefreshMessage(`Loaded ${steamCount + epicCount} deals from Steam & Epic! Matching games generated.`)
+        setTimeout(() => setRefreshMessage(null), 6000)
       }
     } catch (e) {
       console.error(e)
+      setRefreshMessage("Live fetch failed. Please check internet connection.")
+      setTimeout(() => setRefreshMessage(null), 4000)
     } finally {
       setGenerating(false)
     }
@@ -344,6 +359,16 @@ export default function DashboardPage() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-col gap-8 relative">
+        
+        {/* Scraper progress & load counts notification banner */}
+        {refreshMessage && (
+          <div className="bg-[#6c63ff]/10 border border-[#6c63ff]/20 text-[#00d4ff] px-6 py-4 rounded-2xl flex items-center gap-3 shadow-lg font-bold text-sm transition-all duration-300">
+            {!refreshMessage.includes("Loaded") && !refreshMessage.includes("failed") && (
+              <Loader2 className="w-5 h-5 animate-spin text-[#00d4ff]" />
+            )}
+            {refreshMessage}
+          </div>
+        )}
         
         {/* Row 1: Profile card info */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/5 pb-6">

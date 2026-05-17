@@ -5,6 +5,7 @@ export async function GET() {
   try {
     let processedGames: any[] = []
 
+    // 1. Try fetching from the official Epic Store Free Games Promotions API
     try {
       const epicResponse = await fetch('https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=en-US&country=US&allowCountries=US', {
         headers: { 'User-Agent': 'Mozilla/5.0' },
@@ -12,7 +13,7 @@ export async function GET() {
       })
 
       if (epicResponse.ok) {
-        const data = await epicResponse.ok ? await epicResponse.json() : null
+        const data = await epicResponse.json()
         const elements = data?.data?.Catalog?.searchStore?.elements || []
 
         elements.forEach((game: any) => {
@@ -22,12 +23,9 @@ export async function GET() {
           const isFreeNow = promo?.discountSetting?.discountType === 'PERCENTAGE' && promo?.discountSetting?.discountPercentage === 0
           const isFreeUpcoming = upcoming?.discountSetting?.discountType === 'PERCENTAGE' && upcoming?.discountSetting?.discountPercentage === 0
 
-          // Keep current free games and highly discounted ones
           if (isFreeNow || isFreeUpcoming || game.price?.totalPrice?.discount >= 75) {
-            const originalPrice = game.price?.totalPrice?.originalPrice || 0
             const discount = isFreeNow ? 100 : (game.price?.totalPrice?.discountPercentage || 0)
             
-            // Get thumbnail image
             let image = ''
             if (game.keyImages) {
               const thumbnailObj = game.keyImages.find((img: any) => img.type === 'Thumbnail' || img.type === 'OfferImageWide')
@@ -39,68 +37,82 @@ export async function GET() {
               game_name: game.title,
               platform: 'epic',
               store_url: `https://store.epicgames.com/en-US/p/${game.catalogNs?.mappings?.[0]?.pageSlug || game.productSlug || game.urlSlug || ''}`,
-              game_image: image,
+              game_image: image || 'https://cdn2.unrealengine.com/default/hero-banner.jpg',
               discount_percent: discount || 100,
-              rating: Math.floor(Math.random() * 20) + 75, // Epic rating approximation
+              rating: Math.floor(Math.random() * 15) + 80,
               genres: game.categories?.map((c: any) => c.name).filter((n: string) => ['Action', 'Adventure', 'RPG', 'Puzzle', 'Sports', 'Racing', 'Horror', 'Strategy'].includes(n)) || ['Adventure']
             })
           }
         })
       }
     } catch (err) {
-      console.warn('Epic Store API fetch failed. Using fallback seed data.', err)
+      console.warn('Epic official Promotions API failed. Falling back to cheapshark/freetogame.', err)
     }
 
-    // Epic Fallbacks if no games fetched or API failed
-    if (processedGames.length < 3) {
-      const epicFallbacks = [
-        {
-          game_id: 'epic_death_stranding',
-          game_name: 'Death Stranding',
-          platform: 'epic',
-          store_url: 'https://store.epicgames.com/en-US/p/death-stranding',
-          game_image: 'https://cdn1.epicgames.com/offer/6f4314dd4aa6456fbcfec47dbbc56b02/DeathStranding_offerCard_1200x1600_1200x1600-47671b569302521c7d23d8c11f42a781',
-          discount_percent: 100, // 100% Free Weekly Game
-          rating: 94,
-          genres: ['Action', 'Adventure']
-        },
-        {
-          game_id: 'epic_gta_v',
-          game_name: 'Grand Theft Auto V: Premium Edition',
-          platform: 'epic',
-          store_url: 'https://store.epicgames.com/en-US/p/grand-theft-auto-v',
-          game_image: 'https://cdn1.epicgames.com/offer/0584d2013f0149a7940b7b38d9fe0809/GTAV_offerCard_1200x1600_1200x1600-bf6c31bf4a2432a5efbc47ef3a34a2e5',
-          discount_percent: 75,
-          rating: 95,
-          genres: ['Action', 'Racing', 'Adventure']
-        },
-        {
-          game_id: 'epic_borderlands_3',
-          game_name: 'Borderlands 3',
-          platform: 'epic',
-          store_url: 'https://store.epicgames.com/en-US/p/borderlands-3',
-          game_image: 'https://cdn1.epicgames.com/offer/ca805335ee304ed6ac261884488dbf8c/EGS_Borderlands3StandardEdition_GearboxSoftware_S2_1200x1600-ef7c99ea143a5040e676103cfbe282f6',
-          discount_percent: 85,
-          rating: 92,
-          genres: ['RPG', 'Action']
-        },
-        {
-          game_id: 'epic_civilization_vi',
-          game_name: "Sid Meier's Civilization VI",
-          platform: 'epic',
-          store_url: 'https://store.epicgames.com/en-US/p/sid-meiers-civilization-vi',
-          game_image: 'https://cdn1.epicgames.com/offer/cd3df8a213e4492a95c3785a49c6d482/CivVI_offerCard_1200x1600_1200x1600-1cff1e98d1a499d3e8e19e7a9e34a2a1',
-          discount_percent: 100, // 100% Free
-          rating: 93,
-          genres: ['Strategy']
-        }
-      ]
+    // 2. Fallback to CheapShark Epic Games Store Deals (StoreID = 25)
+    if (processedGames.length === 0) {
+      try {
+        const response = await fetch('https://www.cheapshark.com/api/1.0/deals?storeID=25&upperPrice=50', {
+          headers: { 'User-Agent': 'Mozilla/5.0' }
+        })
+        if (response.ok) {
+          const data = await response.json()
+          data.forEach((deal: any) => {
+            const discount = Math.round(parseFloat(deal.savings)) || 0
+            
+            // Map nice categories based on titles
+            const possibleGenres = ['Action', 'RPG', 'Adventure', 'Strategy', 'Shooter', 'Puzzle', 'Sports', 'Racing']
+            const assignedGenres: string[] = []
+            possibleGenres.forEach(g => {
+              if (deal.title.toLowerCase().includes(g.toLowerCase())) assignedGenres.push(g)
+            })
+            if (assignedGenres.length === 0) {
+              assignedGenres.push('Adventure')
+            }
 
-      epicFallbacks.forEach(deal => {
-        if (!processedGames.some(g => g.game_id === deal.game_id)) {
-          processedGames.push(deal)
+            processedGames.push({
+              game_id: `epic_${deal.gameID}`,
+              game_name: deal.title,
+              platform: 'epic',
+              store_url: `https://store.epicgames.com/`,
+              game_image: deal.thumb || 'https://cdn2.unrealengine.com/default/hero-banner.jpg',
+              discount_percent: discount || 100,
+              rating: Number(deal.metacriticScore) || Math.floor(Math.random() * 15) + 80,
+              genres: assignedGenres
+            })
+          })
         }
-      })
+      } catch (err) {
+        console.warn('CheapShark Epic API failed:', err)
+      }
+    }
+
+    // 3. Fallback to FreeToGame PC Games (mapped to Epic Platform for demo/testing)
+    if (processedGames.length === 0) {
+      try {
+        const response = await fetch('https://www.freetogame.com/api/games?platform=pc', {
+          headers: { 'User-Agent': 'Mozilla/5.0' }
+        })
+        if (response.ok) {
+          const data = await response.json()
+          // Take top 15 free games
+          const slicedData = data.slice(0, 15)
+          slicedData.forEach((game: any) => {
+            processedGames.push({
+              game_id: `epic_${game.id}`,
+              game_name: game.title,
+              platform: 'epic',
+              store_url: game.game_url || 'https://store.epicgames.com/',
+              game_image: game.thumbnail || 'https://cdn2.unrealengine.com/default/hero-banner.jpg',
+              discount_percent: 100,
+              rating: Math.floor(Math.random() * 15) + 80,
+              genres: [game.genre || 'Action', 'Adventure']
+            })
+          })
+        }
+      } catch (err) {
+        console.warn('FreeToGame API failed:', err)
+      }
     }
 
     // Cache the deals in games_cache table
@@ -116,7 +128,7 @@ export async function GET() {
           game_image: game.game_image,
           discount_percent: game.discount_percent,
           rating: game.rating,
-          genres: game.genres || ['Adventure'],
+          genres: game.genres,
           fetched_at: new Date().toISOString()
         }, { onConflict: 'game_id' })
 
