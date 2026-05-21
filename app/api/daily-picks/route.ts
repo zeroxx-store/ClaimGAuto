@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { generatePicksForUser } from './generate/route'
+import { generatePicksForUser } from '@/lib/picks-generator'
 
 export async function GET(req: NextRequest) {
   try {

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { ExternalLink, Star, Percent, Gift, Sparkles } from 'lucide-react'
 
 interface GameCardProps {
@@ -19,16 +19,21 @@ interface GameCardProps {
 
 export default function GameCard({ game, onGet, needsAd }: GameCardProps) {
   const [loading, setLoading] = useState(false)
+  const loadingRef = useRef(false)
   const isFree = game.discount_percent === 100
+  const hasDeal = game.discount_percent >= 5
 
   const handleClick = async () => {
+    if (loadingRef.current) return
+    loadingRef.current = true
+    setLoading(true)
     try {
-      setLoading(true)
       await onGet(game)
     } catch (e) {
       console.error('Error in GameCard get handler:', e)
     } finally {
       setLoading(false)
+      loadingRef.current = false
     }
   }
 
@@ -73,17 +78,19 @@ export default function GameCard({ game, onGet, needsAd }: GameCardProps) {
         </div>
 
         {/* Floating Deal Badge */}
-        <div className="absolute top-3 right-3">
-          {isFree ? (
-            <span className="flex items-center gap-1 bg-emerald-500 text-white text-[10px] sm:text-xs font-extrabold px-3 py-1.5 rounded-xl shadow-lg shadow-emerald-500/20 animate-pulse">
-              <Gift className="w-3.5 h-3.5 fill-white" /> FREE
-            </span>
-          ) : (
-            <span className="flex items-center gap-0.5 bg-[#6c63ff] text-white text-[10px] sm:text-xs font-extrabold px-3 py-1.5 rounded-xl shadow-lg shadow-[#6c63ff]/20">
-              <Percent className="w-3.5 h-3.5" /> {game.discount_percent}% OFF
-            </span>
-          )}
-        </div>
+        {hasDeal && (
+          <div className="absolute top-3 right-3">
+            {isFree ? (
+              <span className="flex items-center gap-1 bg-emerald-500 text-white text-[10px] sm:text-xs font-extrabold px-3 py-1.5 rounded-xl shadow-lg shadow-emerald-500/20 animate-pulse">
+                <Gift className="w-3.5 h-3.5 fill-white" /> FREE
+              </span>
+            ) : (
+              <span className="flex items-center gap-0.5 bg-[#6c63ff] text-white text-[10px] sm:text-xs font-extrabold px-3 py-1.5 rounded-xl shadow-lg shadow-[#6c63ff]/20">
+                <Percent className="w-3.5 h-3.5" /> {game.discount_percent}% OFF
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Game Details */}

@@ -6,8 +6,8 @@ export async function GET() {
   try {
     // Run all scrapers in parallel
     const [steamGames, epicGames] = await Promise.all([
-      scraperService.scrapeSteamDB(),
-      scraperService.scrapeEpicGames()
+      scraperService.scrapeSteam(),
+      scraperService.scrapeEpic()
     ])
 
     const allGames = [...steamGames, ...epicGames]

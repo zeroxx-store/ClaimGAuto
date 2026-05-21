@@ -1,9 +1,9 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { X, ExternalLink, Star, Gift, Percent, Clock } from 'lucide-react'
 
 interface Treasure {
-  id: string // UUID of the alert
+  id: string
   game_id: string
   game_name: string
   platform: 'steam' | 'epic'
@@ -23,8 +23,12 @@ export default function TreasureFrame({ userId, onGet, needsAd }: TreasureFrameP
   const [treasure, setTreasure] = useState<Treasure | null>(null)
   const [visible, setVisible] = useState(false)
   const [countdown, setCountdown] = useState(10)
+  const treasureRef = useRef(treasure)
 
-  // Fetch unseen treasure on load
+  useEffect(() => {
+    treasureRef.current = treasure
+  }, [treasure])
+
   useEffect(() => {
     if (!userId) return
 
@@ -39,7 +43,6 @@ export default function TreasureFrame({ userId, onGet, needsAd }: TreasureFrameP
       .catch(err => console.error('Failed to load treasure details:', err))
   }, [userId])
 
-  // Countdown timer logic
   useEffect(() => {
     if (!visible) return
 
@@ -47,7 +50,7 @@ export default function TreasureFrame({ userId, onGet, needsAd }: TreasureFrameP
       setCountdown(prev => {
         if (prev <= 1) {
           clearInterval(timer)
-          handleClose() // Auto dismiss on timeout
+          dismiss(treasureRef.current)
           return 0
         }
         return prev - 1
@@ -57,39 +60,29 @@ export default function TreasureFrame({ userId, onGet, needsAd }: TreasureFrameP
     return () => clearInterval(timer)
   }, [visible])
 
-  const handleGet = async () => {
-    if (!treasure) return
-    
-    // Open game via ad-aware router
+  function dismiss(t: Treasure | null) {
     setVisible(false)
-    await onGet(treasure)
-
-    // Mark as clicked
-    try {
-      await fetch('/api/treasure/seen', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, gameId: treasure.id, clicked: true })
-      })
-    } catch (e) {
-      console.error(e)
-    }
+    if (!t) return
+    fetch('/api/treasure/seen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, gameId: t.id, seen: true })
+    }).catch(() => {})
   }
 
-  const handleClose = async () => {
-    setVisible(false)
+  const handleGet = async () => {
     if (!treasure) return
+    setVisible(false)
+    await onGet(treasure)
+    fetch('/api/treasure/seen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, gameId: treasure.id, clicked: true })
+    }).catch(() => {})
+  }
 
-    // Mark as seen so it doesn't pop up again
-    try {
-      await fetch('/api/treasure/seen', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, gameId: treasure.id, seen: true })
-      })
-    } catch (e) {
-      console.error(e)
-    }
+  const handleClose = () => {
+    dismiss(treasure)
   }
 
   if (!visible || !treasure) return null

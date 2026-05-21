@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
@@ -41,6 +41,32 @@ export default function DashboardPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Filters state
+  const [activeFilter, setActiveFilter] = useState('all')
+
+  const FILTERS = [
+    { key: 'all', label: 'All', icon: '🎮' },
+    { key: 'steam', label: 'Steam', icon: '🔵' },
+    { key: 'epic', label: 'Epic', icon: '🟣' },
+    { key: 'free', label: 'Free', icon: '💰' },
+    { key: 'discount90', label: '90%+ Off', icon: '🔥' },
+    { key: 'rating80', label: '80%+ Rating', icon: '⭐' },
+  ]
+
+  const filteredPicks = useMemo(() => {
+    if (activeFilter === 'all') return picks
+    return picks.filter((game: any) => {
+      switch (activeFilter) {
+        case 'steam': return game.platform === 'steam'
+        case 'epic': return game.platform === 'epic'
+        case 'free': return game.discount_percent === 100
+        case 'discount90': return game.discount_percent >= 90
+        case 'rating80': return game.rating >= 80
+        default: return true
+      }
+    })
+  }, [picks, activeFilter])
 
   // Custom mock video ad states
   const [adOverlayVisible, setAdOverlayVisible] = useState(false)
@@ -508,6 +534,9 @@ export default function DashboardPage() {
           <div className="flex justify-between items-center gap-4">
             <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
               <Gift className="w-5 h-5 text-[#6c63ff]" /> Today's Recommendations
+              {picks.length > 0 && (
+                <span className="text-xs font-normal text-gray-500 ml-1">({picks.length})</span>
+              )}
             </h2>
             <button 
               onClick={handleGeneratePicks}
@@ -524,26 +553,52 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {picks.length === 0 ? (
+          {/* Filter bar */}
+          {picks.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setActiveFilter(f.key)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all duration-200 flex items-center gap-1.5 ${
+                    activeFilter === f.key
+                      ? 'bg-[#6c63ff] text-white border-[#6c63ff] shadow-md shadow-[#6c63ff]/20'
+                      : 'bg-[#1f1f1f] border-gray-700 text-gray-400 hover:bg-[#6c63ff]/20 hover:text-white hover:border-[#6c63ff]/40'
+                  }`}
+                >
+                  <span>{f.icon}</span>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {filteredPicks.length === 0 ? (
             <div className="bg-[#1f1f1f]/20 backdrop-blur-md border border-white/5 p-12 rounded-3xl text-center flex flex-col items-center gap-4">
               <Bot className="w-12 h-12 text-[#6c63ff]" />
               <div>
-                <h3 className="text-white font-bold text-lg">No games found matching your preferences</h3>
+                <h3 className="text-white font-bold text-lg">
+                  {activeFilter === 'all' ? 'No games found matching your preferences' : `No games match the "${FILTERS.find(f => f.key === activeFilter)?.label}" filter`}
+                </h3>
                 <p className="text-gray-400 text-sm mt-1 max-w-sm mx-auto">
-                  Try adjusting your preferences in the Preference Chat, or click below to refresh and fetch the latest live deals from Steam and Epic Games.
+                  {activeFilter === 'all'
+                    ? 'Try adjusting your preferences in the Preference Chat, or click below to refresh and fetch the latest live deals from Steam and Epic Games.'
+                    : 'Try a different filter or adjust your preferences in the Preference Chat.'}
                 </p>
               </div>
-              <button
-                onClick={handleGeneratePicks}
-                disabled={generating}
-                className="bg-gradient-to-r from-[#6c63ff] to-[#00d4ff] hover:opacity-90 text-white font-bold px-6 py-3 rounded-xl text-xs uppercase transition shadow-md shadow-[#6c63ff]/10 disabled:opacity-50"
-              >
-                {generating ? 'Running Scrapers...' : 'Fetch Live Game Database'}
-              </button>
+              {activeFilter === 'all' && (
+                <button
+                  onClick={handleGeneratePicks}
+                  disabled={generating}
+                  className="bg-gradient-to-r from-[#6c63ff] to-[#00d4ff] hover:opacity-90 text-white font-bold px-6 py-3 rounded-xl text-xs uppercase transition shadow-md shadow-[#6c63ff]/10 disabled:opacity-50"
+                >
+                  {generating ? 'Running Scrapers...' : 'Fetch Live Game Database'}
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {picks.map((game) => (
+              {filteredPicks.map((game) => (
                 <GameCard
                   key={game.id}
                   game={game}
@@ -567,7 +622,7 @@ export default function DashboardPage() {
             }}
             onPreferencesSaved={async () => {
               // Automatically regenerate matches when user preferences are saved
-              await handleTargetedPicksRefresh()
+              await handleGeneratePicks()
             }}
           />
         </div>

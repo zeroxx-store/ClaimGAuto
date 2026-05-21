@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { generatePicksForUser } from '../daily-picks/generate/route'
+import { generatePicksForUser } from '@/lib/picks-generator'
 
 const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
 const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
@@ -96,13 +96,6 @@ async function detectUserIntent(message: string, currentPrefs: any, userId: stri
       chat_history: [...history, { role: 'user', content: message }],
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' })
-
-  // Trigger immediate targeted daily picks generation
-  try {
-    await generatePicksForUser(userId)
-  } catch (err) {
-    console.error('Failed to trigger targeted generatePicksForUser:', err)
-  }
 
   return updatedPrefs
 }

@@ -14,6 +14,19 @@ export default function PricingPage() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user || null)
     })
+
+    // Reset loading state on mount
+    setLoading(false)
+
+    // Handle browser back button (bfcache) restoring previous javascript state
+    const handlePageShow = (event: PageTransitionEvent) => {
+      setLoading(false)
+    }
+
+    window.addEventListener('pageshow', handlePageShow)
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow)
+    }
   }, [])
 
   const handleSubscribe = async (plan: string) => {

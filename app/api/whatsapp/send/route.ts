@@ -6,20 +6,29 @@ export async function POST(req: NextRequest) {
     const token = process.env.WHATSAPP_API_TOKEN
     const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
 
-    // 1. Fetch Ultimate users with a registered phone number
-    const { data: users, error: usersError } = await supabaseAdmin
+    // 1. Fetch users with a registered phone number
+    const testMode = process.env.TEST_MODE_FREE_AS_ULTIMATE === 'true'
+
+    let query = supabaseAdmin
       .from('users')
-      .select('id, email, whatsapp_phone')
-      .eq('plan', 'ultimate')
+      .select('id, email, whatsapp_phone, plan')
       .not('whatsapp_phone', 'is', null)
 
+    if (testMode) {
+      query = query.in('plan', ['ultimate', 'free'])
+    } else {
+      query = query.eq('plan', 'ultimate')
+    }
+
+    const { data: users, error: usersError } = await query
+
     if (usersError) {
-      console.error('Error fetching Ultimate users for WhatsApp send:', usersError)
+      console.error('Error fetching users for WhatsApp send:', usersError)
       return NextResponse.json({ error: 'Failed to retrieve subscribers' }, { status: 500 })
     }
 
     if (!users || users.length === 0) {
-      return NextResponse.json({ success: true, message: 'No Ultimate users with WhatsApp phone numbers found.' })
+      return NextResponse.json({ success: true, message: 'No WhatsApp-enabled users found.' })
     }
 
     let messagesSentCount = 0
@@ -85,7 +94,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Broadcasting completed. Broadcasted notifications to ${messagesSentCount} Ultimate subscribers.`,
+      message: `Broadcasting completed. Broadcasted notifications to ${messagesSentCount} subscribers.`,
       simulated: mockModeActive
     })
 

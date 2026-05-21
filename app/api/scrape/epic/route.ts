@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 
 export async function GET() {
   try {
-    const epicGames = await scraperService.scrapeEpicGames()
+    const epicGames = await scraperService.scrapeEpic()
 
     let savedCount = 0
     for (const game of epicGames) {

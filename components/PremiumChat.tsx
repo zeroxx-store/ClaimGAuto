@@ -52,37 +52,32 @@ export default function PremiumChat({
 
   const loadPreferences = async () => {
     try {
-      const res = await fetch(`/api/user/preferences?userId=${userId}`)
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, message: '' })
+      })
       const data = await res.json()
-      if (data.preferences) {
-        setMessages([
-          {
-            id: 'welcome',
-            role: 'assistant',
-            content: `🎮 **Welcome back, Commander!**
 
-Your current loadout:
-• Genres: ${data.preferences.genres?.join(', ') || 'Not set yet'}
-• Deal type: ${data.preferences.price_type || 'discount75'}
-• Min rating: ${data.preferences.min_rating || 70}%
-
-Ready to update your hunting parameters? Tell me what to modify, or tap an action below.`,
-            timestamp: new Date()
-          }
-        ])
+      if (data.history && data.history.length > 0) {
+        const loaded = data.history.map((m: any, i: number) => ({
+          id: `hist-${i}`,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          timestamp: new Date()
+        }))
+        setMessages(loaded)
       } else {
-        setMessages([
-          {
-            id: 'welcome',
-            role: 'assistant',
-            content: `🎮 **Greetings, Gamer!**
+        setMessages([{
+          id: 'welcome',
+          role: 'assistant',
+          content: `🎮 **Greetings, Gamer!**
 
 I'm your battle-hardened gaming assistant. Let's customize your discovery filters to hunt down the absolute best free & discounted deals from Steam and Epic Games!
 
 Tap any Quick Action command below or chat with me in your own words.`,
-            timestamp: new Date()
-          }
-        ])
+          timestamp: new Date()
+        }])
       }
     } catch (e) {
       console.error(e)
